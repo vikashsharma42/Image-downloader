@@ -6,8 +6,17 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-// Load .env file for local development
-if (process.env.NODE_ENV !== "production") {
+const rawNodeEnv = process.env.NODE_ENV?.trim()?.toLowerCase() || "development";
+const NODE_ENV =
+  rawNodeEnv === "prod"
+    ? "production"
+    : rawNodeEnv === "devc"
+      ? "development"
+      : rawNodeEnv;
+const isProduction = NODE_ENV === "production";
+
+// Load .env file for local development or non-production environments
+if (!isProduction) {
   require("dotenv").config();
 }
 
@@ -16,7 +25,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const HOST = "0.0.0.0";
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 app.use(express.static("public"));
 
@@ -212,10 +221,14 @@ io.on("connection", (socket) => {
 });
 
 server.listen(PORT, HOST, () => {
-  const env = process.env.NODE_ENV || "development";
+  const env = NODE_ENV;
   const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
   const publicUrl = publicDomain
-    ? `https://${publicDomain}`
+    ? publicDomain.match(/^https?:\/\//)
+      ? publicDomain
+      : publicDomain.includes("localhost")
+        ? `http://${publicDomain}`
+        : `https://${publicDomain}`
     : `http://localhost:${PORT}`;
 
   console.log(`\n${"=".repeat(60)}`);
