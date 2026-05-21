@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Image Downloader</title>
+    <link img rel="icon" href="/images/logo.svg" />
 
     <script src="/socket.io/socket.io.js"></script>
 
@@ -271,6 +272,7 @@
     <script>
       const socket = io();
       let isDownloading = false;
+      let downloadUrl = null;
 
       // Dynamic year
       document.getElementById("year").textContent = new Date().getFullYear();
@@ -323,16 +325,27 @@
         document.getElementById("percent").textContent = percent + "%";
       });
 
-      socket.on("completed", (count) => {
-        const statusBox = document.getElementById("status");
-        statusBox.textContent = `✅ Download Complete! ${count} images saved`;
-        document.getElementById("downloadStatus").textContent = "Complete";
-        log(`Download finished: ${count} images saved`);
+      socket.on("download-url", (url) => {
+        downloadUrl = url;
+        log("Download ready");
       });
 
       socket.on("done-reset", () => {
         document.getElementById("btn").disabled = false;
         isDownloading = false;
+      });
+
+      socket.on("completed", (count) => {
+        const statusBox = document.getElementById("status");
+
+        statusBox.textContent = `✅ Download Complete! ${count} images saved`;
+        document.getElementById("downloadStatus").textContent = "Complete";
+
+        log(`Download finished: ${count} images saved`);
+
+        if (downloadUrl) {
+          window.location.href = downloadUrl;
+        }
       });
 
       document.getElementById("url").addEventListener("keypress", (e) => {
