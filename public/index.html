@@ -108,14 +108,6 @@
         align-items: center;
       }
 
-      .status-box.error {
-        border-left-color: #ef4444;
-      }
-
-      .status-box.success {
-        border-left-color: #3b82f6;
-      }
-
       .progress-container {
         margin-bottom: 15px;
       }
@@ -247,11 +239,41 @@
       </div>
 
       <div class="logs" id="logs"></div>
+
+      <!-- Footer -->
+      <div
+        style="
+          margin-top: 20px;
+          padding-top: 15px;
+          border-top: 1px solid rgba(148, 163, 184, 0.2);
+          text-align: center;
+          font-size: 12px;
+          color: #94a3b8;
+        "
+      >
+        <div style="margin-bottom: 5px">
+          © <span id="year"></span> Developed by
+          <span style="color: #22c55e; font-weight: 600">Vikas Kumar</span>
+        </div>
+
+        <div>
+          <a
+            href="https://vikashdeveloper.vercel.app/"
+            target="_blank"
+            style="color: #06b6d4; text-decoration: none"
+          >
+            🌐 Visit Website
+          </a>
+        </div>
+      </div>
     </div>
 
     <script>
       const socket = io();
       let isDownloading = false;
+
+      // Dynamic year
+      document.getElementById("year").textContent = new Date().getFullYear();
 
       function log(msg) {
         const logsDiv = document.getElementById("logs");
@@ -277,8 +299,6 @@
 
         const statusBox = document.getElementById("status");
         statusBox.textContent = "Starting...";
-        statusBox.classList.remove("error", "success");
-
         log("Starting download process...");
         socket.emit("start-download", url);
       }
@@ -306,9 +326,8 @@
       socket.on("completed", (count) => {
         const statusBox = document.getElementById("status");
         statusBox.textContent = `✅ Download Complete! ${count} images saved`;
-        statusBox.classList.add("success");
         document.getElementById("downloadStatus").textContent = "Complete";
-        log(`✅ Download finished: ${count} images saved`);
+        log(`Download finished: ${count} images saved`);
       });
 
       socket.on("done-reset", () => {
@@ -316,7 +335,6 @@
         isDownloading = false;
       });
 
-      // Handle URL paste/input
       document.getElementById("url").addEventListener("keypress", (e) => {
         if (e.key === "Enter" && !isDownloading) {
           start();

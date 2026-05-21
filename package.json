@@ -1,9 +1,9 @@
 {
   "name": "image-project",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Image downloader with Puppeteer + Socket.IO",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
   "keywords": [],
@@ -11,11 +11,13 @@
   "license": "ISC",
   "dependencies": {
     "archiver": "^8.0.0",
-    "axios": "^1.16.1",
+    "axios": "^1.6.0",
     "cheerio": "^1.2.0",
-    "express": "^5.2.1",
+    "express": "^4.18.2",
     "puppeteer": "^25.0.4",
     "socket.io": "^4.8.3"
   },
-  "description": ""
+  "engines": {
+    "node": "18.x"
+  }
 }
