@@ -6,11 +6,26 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
+const rawNodeEnv = process.env.NODE_ENV?.trim()?.toLowerCase() || "development";
+const NODE_ENV =
+  rawNodeEnv === "prod"
+    ? "production"
+    : rawNodeEnv === "devc"
+      ? "development"
+      : rawNodeEnv;
+const isProduction = NODE_ENV === "production";
+
+// Load .env file for local development or non-production environments
+if (!isProduction) {
+  require("dotenv").config();
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 3000;
+const HOST = "0.0.0.0";
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 app.use(express.static("public"));
 
@@ -205,6 +220,20 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+server.listen(PORT, HOST, () => {
+  const env = NODE_ENV;
+  const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  const publicUrl = publicDomain
+    ? publicDomain.match(/^https?:\/\//)
+      ? publicDomain
+      : publicDomain.includes("localhost")
+        ? `http://${publicDomain}`
+        : `https://${publicDomain}`
+    : `http://localhost:${PORT}`;
+
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Environment: ${env}`);
+  console.log(`✓ Public URL: ${publicUrl}`);
+  console.log(`${"=".repeat(60)}\n`);
 });
