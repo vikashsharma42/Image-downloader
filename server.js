@@ -16,89 +16,64 @@ app.use(express.static("public"));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// IMPROVED SCROLLING FOR LAZY-LOADED IMAGES
+/* ---------------- SCROLL FUNCTION ---------------- */
 async function autoScroll(page, socket) {
   let previousHeight = 0;
   let noChangeCount = 0;
-  const maxNoChange = 5; // Stop after 5 scrolls with no new content
+  const maxNoChange = 5;
   let scrollCount = 0;
 
-  socket.emit("status", "Loading images (this may take a while)...");
+  socket.emit("status", "Loading images...");
 
   while (noChangeCount < maxNoChange) {
     scrollCount++;
+    socket.emit("status", `Loading complete (${scrollCount} scrolls)...`);
+
     const currentHeight = await page.evaluate(() => document.body.scrollHeight);
 
     if (currentHeight === previousHeight) {
       noChangeCount++;
-      socket.emit("status", `Loading complete (${scrollCount} scrolls)...`);
     } else {
       noChangeCount = 0;
     }
 
-    // Scroll down
     await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-
-    // Wait for lazy-loaded content to render
     await sleep(2000);
 
     previousHeight = currentHeight;
   }
 
-  // Go back to top
   await page.evaluate(() => window.scrollTo(0, 0));
   await sleep(500);
 }
 
-// BETTER IMAGE EXTRACTION
+/* ---------------- IMAGE EXTRACTION ---------------- */
 async function extractAllImages(page) {
   return await page.evaluate(() => {
     const urls = new Set();
 
-    // 1. Extract from img src attributes
     document.querySelectorAll("img").forEach((img) => {
-      if (img.src && img.src.trim()) urls.add(img.src);
-      if (img.dataset.src && img.dataset.src.trim()) urls.add(img.dataset.src);
+      if (img.src) urls.add(img.src);
+      if (img.dataset.src) urls.add(img.dataset.src);
     });
 
-    // 2. Extract from lazy-loading attributes
     document.querySelectorAll("[data-src]").forEach((el) => {
-      if (el.dataset.src && el.dataset.src.trim()) urls.add(el.dataset.src);
+      if (el.dataset.src) urls.add(el.dataset.src);
     });
 
-    // 3. Extract from background images
     document.querySelectorAll("*").forEach((el) => {
       const style = window.getComputedStyle(el);
       if (style.backgroundImage && style.backgroundImage !== "none") {
-        const match = style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);
+        const match = style.backgroundImage.match(/url\\(["']?(.*?)["']?\\)/);
         if (match && match[1]) urls.add(match[1]);
       }
     });
 
-    // 4. Extract from picture elements
-    document.querySelectorAll("picture source").forEach((source) => {
-      if (source.srcset) {
-        const urls_from_srcset = source.srcset.split(",").map((item) => {
-          return item.split(" ")[0].trim();
-        });
-        urls_from_srcset.forEach((url) => {
-          if (url) urls.add(url);
-        });
-      }
-    });
-
-    // Filter out invalid URLs
-    return Array.from(urls).filter(
-      (url) =>
-        url &&
-        (url.startsWith("http") ||
-          url.startsWith("//") ||
-          url.startsWith("/") ||
-          url.startsWith("data:")),
-    );
+    return Array.from(urls).filter((url) => url);
   });
 }
 
+/* ---------------- SOCKET ---------------- */
 io.on("connection", (socket) => {
   socket.on("start-download", async (galleryUrl) => {
     let browser;
@@ -107,43 +82,36 @@ io.on("connection", (socket) => {
       socket.emit("status", "Launching browser...");
 
       browser = await puppeteer.launch({
-        headless: "new",
-        defaultViewport: null,
+        headless: true,
         args: [
-          "--disable-blink-features=AutomationControlled",
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
         ],
       });
 
       const page = await browser.newPage();
 
-      // Set realistic user agent
       await page.setUserAgent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       );
 
-      socket.emit("status", "Navigating to gallery...");
+      socket.emit("status", "Opening page...");
       await page.goto(galleryUrl, {
         waitUntil: "networkidle2",
         timeout: 0,
       });
 
-      // Wait for images to start loading
       await sleep(2000);
 
-      // SCROLL AND LOAD ALL IMAGES
       await autoScroll(page, socket);
 
-      socket.emit("status", "Extracting image URLs...");
+      socket.emit("status", "Extracting images...");
       let imageUrls = await extractAllImages(page);
 
-      // Remove duplicates
       imageUrls = [...new Set(imageUrls)];
 
       socket.emit("total", imageUrls.length);
-      socket.emit("status", `Found ${imageUrls.length} images`);
 
       if (imageUrls.length === 0) {
         socket.emit("status", "No images found");
@@ -157,23 +125,17 @@ io.on("connection", (socket) => {
       }
 
       let downloaded = 0;
-      const baseName = "saadi-image";
-
-      socket.emit("status", "Downloading images...");
+      const baseName = "image";
 
       for (let i = 0; i < imageUrls.length; i++) {
         let imgUrl = imageUrls[i];
 
         try {
-          // Handle protocol-relative URLs
           if (imgUrl.startsWith("//")) {
             imgUrl = "https:" + imgUrl;
           }
 
-          // Skip data URLs
-          if (imgUrl.startsWith("data:")) {
-            continue;
-          }
+          if (imgUrl.startsWith("data:")) continue;
 
           const response = await axios({
             url: imgUrl,
@@ -181,35 +143,19 @@ io.on("connection", (socket) => {
             responseType: "stream",
             timeout: 20000,
             headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
               Referer: galleryUrl,
             },
-            maxRedirects: 5,
           });
 
-          // Check content type
           const contentType = response.headers["content-type"];
-          if (!contentType || !contentType.includes("image")) {
-            continue;
-          }
+          if (!contentType || !contentType.includes("image")) continue;
 
           downloaded++;
 
-          // Extract file extension
-          const cleanUrl = imgUrl.split("?")[0];
           let ext = ".jpg";
-
-          const extMatch = cleanUrl.match(/\.(jpg|jpeg|png|webp|gif|bmp)/i);
-          if (extMatch) {
-            ext = "." + extMatch[1].toLowerCase();
-          } else if (contentType.includes("webp")) {
-            ext = ".webp";
-          } else if (contentType.includes("png")) {
-            ext = ".png";
-          } else if (contentType.includes("gif")) {
-            ext = ".gif";
-          }
+          if (contentType.includes("png")) ext = ".png";
+          if (contentType.includes("webp")) ext = ".webp";
+          if (contentType.includes("gif")) ext = ".gif";
 
           const filename = `${baseName}-${downloaded}${ext}`;
           const filepath = path.join("downloads", filename);
@@ -227,8 +173,7 @@ io.on("connection", (socket) => {
             total: imageUrls.length,
           });
         } catch (err) {
-          // Silent fail for individual image errors
-          console.log(`Failed to download: ${imgUrl}`);
+          console.log("Skip image:", imgUrl);
         }
       }
 
@@ -246,15 +191,15 @@ io.on("connection", (socket) => {
       socket.emit("completed", downloaded);
       socket.emit("done-reset");
     } catch (err) {
-      console.log("Error:", err.message);
+      console.log("ERROR:", err.message);
 
-      socket.emit("status", "Error occurred: " + err.message);
+      socket.emit("status", "Error: " + err.message);
       socket.emit("done-reset");
 
       if (browser) {
         try {
           await browser.close();
-        } catch (e) {}
+        } catch {}
       }
     }
   });
