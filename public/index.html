@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="eng">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Downloader</title>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        color: white;
+        padding: 20px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 500px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 30px;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+
+      h2 {
+        margin-bottom: 20px;
+        font-size: 24px;
+        background: linear-gradient(135deg, #22c55e, #06b6d4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .input-group {
+        margin-bottom: 15px;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 8px;
+        color: white;
+        font-size: 14px;
+        transition: all 0.3s;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: #22c55e;
+        background: rgba(30, 41, 59, 0.8);
+      }
+
+      input::placeholder {
+        color: #64748b;
+      }
+
+      button {
+        width: 100%;
+        padding: 12px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s;
+        margin-bottom: 20px;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(34, 197, 94, 0.3);
+      }
+
+      button:disabled {
+        background: #64748b;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .status-box {
+        background: rgba(30, 41, 59, 0.5);
+        border-left: 3px solid #22c55e;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+      }
+
+      .progress-container {
+        margin-bottom: 15px;
+      }
+
+      .progress-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        color: #94a3b8;
+        margin-bottom: 8px;
+      }
+
+      .bar {
+        height: 8px;
+        background: rgba(30, 41, 59, 0.5);
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      .progress {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #22c55e, #06b6d4);
+        transition: width 0.3s ease;
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 15px;
+        font-size: 13px;
+      }
+
+      .stat-item {
+        background: rgba(30, 41, 59, 0.5);
+        padding: 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      .stat-label {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+
+      .stat-value {
+        color: #22c55e;
+        font-weight: 600;
+        font-size: 16px;
+      }
+
+      .logs {
+        margin-top: 15px;
+        height: 150px;
+        overflow-y: auto;
+        background: rgba(30, 41, 59, 0.3);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        padding: 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        color: #cbd5e1;
+        font-family: "Courier New", monospace;
+      }
+
+      .logs::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .logs::-webkit-scrollbar-track {
+        background: rgba(30, 41, 59, 0.3);
+        border-radius: 10px;
+      }
+
+      .logs::-webkit-scrollbar-thumb {
+        background: rgba(34, 197, 94, 0.5);
+        border-radius: 10px;
+      }
+
+      .logs::-webkit-scrollbar-thumb:hover {
+        background: rgba(34, 197, 94, 0.7);
+      }
+
+      .log-entry {
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      }
+
+      .log-entry:last-child {
+        border-bottom: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h2>Image Downloader</h2>
+
+      <div class="input-group">
+        <input id="url" placeholder="Paste gallery URL here..." />
+      </div>
+
+      <button id="btn" onclick="start()">Start Download</button>
+
+      <div class="status-box" id="status">Ready to download images</div>
+
+      <div class="progress-container">
+        <div class="progress-label">
+          <span>Progress</span>
+          <span id="percent">0%</span>
+        </div>
+        <div class="bar">
+          <div class="progress" id="progress"></div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-label">Downloaded</div>
+          <div class="stat-value" id="counter">0 / 0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Status</div>
+          <div class="stat-value" id="downloadStatus">Waiting</div>
+        </div>
+      </div>
+
+      <div class="logs" id="logs"></div>
+
+      <!-- Footer -->
+      <div
+        style="
+          margin-top: 20px;
+          padding-top: 15px;
+          border-top: 1px solid rgba(148, 163, 184, 0.2);
+          text-align: center;
+          font-size: 12px;
+          color: #94a3b8;
+        "
+      >
+        <div style="margin-bottom: 5px">
+          © <span id="year"></span> Developed by
+          <span style="color: #22c55e; font-weight: 600">Vikas Kumar</span>
+        </div>
+
+        <div>
+          <a
+            href="https://vikashdeveloper.vercel.app/"
+            target="_blank"
+            style="color: #06b6d4; text-decoration: none"
+          >
+            🌐 Visit Website
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const socket = io();
+      let isDownloading = false;
+
+      // Dynamic year
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      function log(msg) {
+        const logsDiv = document.getElementById("logs");
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.textContent = `[${timestamp}] ${msg}`;
+        logsDiv.appendChild(entry);
+        logsDiv.scrollTop = logsDiv.scrollHeight;
+      }
+
+      function start() {
+        const url = document.getElementById("url").value.trim();
+
+        if (!url) {
+          alert("Please enter a URL");
+          return;
+        }
+
+        isDownloading = true;
+        document.getElementById("btn").disabled = true;
+        document.getElementById("logs").innerHTML = "";
+
+        const statusBox = document.getElementById("status");
+        statusBox.textContent = "Starting...";
+        log("Starting download process...");
+        socket.emit("start-download", url);
+      }
+
+      socket.on("status", (msg) => {
+        document.getElementById("status").textContent = msg;
+        log(msg);
+      });
+
+      socket.on("total", (total) => {
+        document.getElementById("counter").textContent = `0 / ${total}`;
+        document.getElementById("downloadStatus").textContent =
+          "Downloading...";
+      });
+
+      socket.on("progress", (data) => {
+        const percent = Math.floor((data.current / data.total) * 100);
+
+        document.getElementById("progress").style.width = percent + "%";
+        document.getElementById("counter").textContent =
+          `${data.current} / ${data.total}`;
+        document.getElementById("percent").textContent = percent + "%";
+      });
+
+      socket.on("completed", (count) => {
+        const statusBox = document.getElementById("status");
+        statusBox.textContent = `✅ Download Complete! ${count} images saved`;
+        document.getElementById("downloadStatus").textContent = "Complete";
+        log(`Download finished: ${count} images saved`);
+      });
+
+      socket.on("done-reset", () => {
+        document.getElementById("btn").disabled = false;
+        isDownloading = false;
+      });
+
+      document.getElementById("url").addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && !isDownloading) {
+          start();
+        }
+      });
+    </script>
+  </body>
+</html>
