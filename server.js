@@ -6,10 +6,16 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
+// Load .env file for local development
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+const HOST = "0.0.0.0";
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
@@ -205,6 +211,16 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+server.listen(PORT, HOST, () => {
+  const env = process.env.NODE_ENV || "development";
+  const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  const publicUrl = publicDomain
+    ? `https://${publicDomain}`
+    : `http://localhost:${PORT}`;
+
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Environment: ${env}`);
+  console.log(`✓ Public URL: ${publicUrl}`);
+  console.log(`${"=".repeat(60)}\n`);
 });
